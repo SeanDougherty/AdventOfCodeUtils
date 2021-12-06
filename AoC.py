@@ -41,7 +41,7 @@ def updateConfigDayValue(config):
         f.write(key+"="+str(val))
       f.write('\n')
 
-def getSecondsUntilDrop():
+def estimateSecondsUntilDrop():
   dt = datetime.datetime
   now = dt.now()
   utc = dt.utctimetuple(now.utcnow())
@@ -50,27 +50,47 @@ def getSecondsUntilDrop():
   sec = utc.tm_sec
   secInDay = 24*3600
   dayTimeInSec = sec + 60 * (mn + 60 * (hr))
-  return (secInDay-dayTimeInSec+1)
+  return (secInDay-dayTimeInSec+30) ## pad ~30 seconds because AoC's clock seems to be roughly 30sec fast
+
+def getSecondsUntilDrop():
+  s = req.session()
+  my_headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:75.0) Gecko/20100101 Firefox/75.0'}
+  s.headers.update(my_headers)
+  r = s.get("https://adventofcode.com/")
+  if not r.ok:
+    return estimateSecondsUntilDrop()
+  else:
+    eta_start = r.text.find("var server_eta = ")+17
+    eta_end = r.text.find(";", eta_start)
+    result = int(r.text[eta_start:eta_end])
+    return result
+  
+
 
 def waitTillDrop():
   secondsLeft = getSecondsUntilDrop()
   done = False
   interrupted = False
   #here is the animation
-  def animate(seconds):
+  def animate():
     count = 0
+    seconds = getSecondsUntilDrop()
     for c in itertools.cycle(["⢿", "⣻", "⣽", "⣾", "⣷", "⣯", "⣟", "⡿"]):
-        totalSecondsLeft = seconds - (count/10)
+        if count % 36000 == 0:
+          seconds = getSecondsUntilDrop()
+          count = 1
+        totalSecondsLeft = seconds - int(count/10)
         if done or interrupted:
             break
         if (totalSecondsLeft > 3600):
           hoursLeft = int(totalSecondsLeft / 3600)
           minutesLeft = int((totalSecondsLeft-(hoursLeft*3600)) / 60)
-          sys.stdout.write(f'\r{c} Waiting {hoursLeft} hours {minutesLeft} minutes {c}')
+          secLeft = totalSecondsLeft % 60
+          sys.stdout.write(f'\r{c} Waiting {hoursLeft} hours {minutesLeft} minutes {secLeft} seconds {c}')
         elif(totalSecondsLeft > 60):
           minutesLeft = int((totalSecondsLeft) / 60)
-          secondsLeft = totalSecondsLeft-(minutesLeft*60)
-          sys.stdout.write(f'\r{c} Waiting {minutesLeft} minutes {secondsLeft} seconds {c}')
+          secLeft = totalSecondsLeft-(minutesLeft*60)
+          sys.stdout.write(f'\r{c} Waiting {minutesLeft} minutes {secLeft} seconds {c}')
         else:
           sys.stdout.write(f'\r{c} Waiting {totalSecondsLeft} seconds {c}')
 
@@ -80,7 +100,7 @@ def waitTillDrop():
     if not interrupted:
       sys.stdout.write('\rDone!     ')
 
-  t = threading.Thread(target=animate, args=(secondsLeft, ))
+  t = threading.Thread(target=animate)
   t.start()
   
   #Blocking wait, still catches Ctrl-C keyboard interrupts quickly
@@ -89,6 +109,8 @@ def waitTillDrop():
     while(count < secondsLeft):
       time.sleep(1)
       count += 1
+      if (count % 1800 == 0):
+        secondsLeft = getSecondsUntilDrop()
   except KeyboardInterrupt:
     interrupted = True
     raise KeyboardInterrupt("User Escape Sequence")
