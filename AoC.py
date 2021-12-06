@@ -22,14 +22,14 @@ def getConfig(keyvals) -> dict:
 def buildNewFolder(day, input):
   os.chdir("..")
   os.mkdir(day)
-  obj = os.scandir("./util/dummy")
+  obj = os.scandir("./AdventOfCodeUtils/dummy")
   for entry in obj :
     if entry.is_file():
       shutil.copy(entry, os.curdir+"/"+day)
   os.chdir(day)
   with open('input.txt','w') as f:
     f.write(input)
-  os.chdir("../util")
+  os.chdir("../AdventOfCodeUtils")
 
 def updateConfigDayValue(config):
   with open('settings.ini', 'w') as f:
