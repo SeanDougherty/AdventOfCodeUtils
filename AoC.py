@@ -88,9 +88,9 @@ def waitTillDrop():
         elif(totalSecondsLeft > 60):
           minutesLeft = int((totalSecondsLeft) / 60)
           secLeft = totalSecondsLeft-(minutesLeft*60)
-          sys.stdout.write(f'\r{c} Waiting {minutesLeft} minutes {secLeft} seconds {c}')
+          sys.stdout.write(f'\r{c} Waiting {minutesLeft} minutes {secLeft} seconds {c}                ')
         else:
-          sys.stdout.write(f'\r{c} Waiting {totalSecondsLeft} seconds {c}')
+          sys.stdout.write(f'\r{c} Waiting {totalSecondsLeft} seconds {c}                            ')
 
         sys.stdout.flush()
         time.sleep(0.1)
@@ -131,6 +131,7 @@ def main() -> int:
     attempts = 1
     while (status_code in retryCodes):
       r = s.get("https://adventofcode.com/2021/day/"+config["day"]+"/input")
+      status_code = r.status_code
       time.sleep(0.2*attempts) # to prevent spamming AoC servers w/ requests
       if not retryWarningSent:
         if not r.ok and status_code in retryCodes:
