@@ -65,22 +65,20 @@ def getSecondsUntilDrop():
     result = int(r.text[eta_start:eta_end])
     return result
   
-
+def getStartTime():
+  secondsUntil = getSecondsUntilDrop() # Remove 1 sec to account for general request latencies
+  return time.time() + secondsUntil
 
 def waitTillDrop():
-  secondsLeft = getSecondsUntilDrop()
+  startTime = getStartTime()
   done = False
   interrupted = False
   #here is the animation
   def animate():
     count = 0
-    seconds = getSecondsUntilDrop()
     for c in itertools.cycle(["⢿", "⣻", "⣽", "⣾", "⣷", "⣯", "⣟", "⡿"]):
-        if count % 36000 == 0:
-          seconds = getSecondsUntilDrop()
-          count = 1
-        totalSecondsLeft = seconds - int(count/10)
-        if done or interrupted:
+        totalSecondsLeft = int(startTime - time.time())
+        if done or interrupted or totalSecondsLeft < 0:
             break
         if (totalSecondsLeft > 3600):
           hoursLeft = int(totalSecondsLeft / 3600)
@@ -105,12 +103,8 @@ def waitTillDrop():
   
   #Blocking wait, still catches Ctrl-C keyboard interrupts quickly
   try:
-    count = 0
-    while(count < secondsLeft):
-      time.sleep(1)
-      count += 1
-      if (count % 1800 == 0):
-        secondsLeft = getSecondsUntilDrop()
+    while(time.time() < startTime):
+      time.sleep(0.5)
   except KeyboardInterrupt:
     interrupted = True
     raise KeyboardInterrupt("User Escape Sequence")
