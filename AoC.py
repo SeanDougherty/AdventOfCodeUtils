@@ -91,6 +91,9 @@ def waitTillDrop(HTTPsession):
         
     if not interrupted:
       sys.stdout.write('\rDone!                                        \n')
+    else:
+      sys.stdout.write("\rLet's try again later                                 ")
+
 
   t = threading.Thread(target=animate)
   t.start()
@@ -114,11 +117,7 @@ def fetchInput(session, config):
       if not response.ok and response.status_code in retryCodes:
         sys.stdout.write("\nCouldn't retrieve input. Waiting until 12:00 EST to attempt a new request.\n")
         retryWarningSent = True
-        try:
-          waitTillDrop(session)
-        except KeyboardInterrupt:
-          sys.stdout.write("\rLet's try again later                           ")
-          raise KeyboardInterrupt
+        waitTillDrop(session)
 
     response = session.get("https://adventofcode.com/2021/day/"+config["day"]+"/input")
     time.sleep(0.2*attempts) # to prevent spamming AoC servers w/ requests
