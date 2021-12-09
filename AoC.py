@@ -19,6 +19,14 @@ def getConfig(keyvals) -> dict:
     raise KeyError(f'Missing {[field for field in expectedKeys]} fields in settings.ini')
   return config
 
+def buildSession(config):
+  session = req.session()
+  my_headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:75.0) Gecko/20100101 Firefox/75.0'}
+  session.headers.update(my_headers)
+  session.cookies.set("session",config["session"],domain="adventofcode.com")
+  return session
+
+
 def increaseConfigDayValue(config):
   with open('settings.ini', 'w') as f:
     for key, val in config.items():
@@ -37,12 +45,12 @@ def buildNewFolder(day, input):
     f.write(input)
   os.chdir("./AdventOfCodeUtils")
 
-def estimateSecondsUntilDrop():
+def estimateSecondsUntilDrop() -> int:
   utc = datetime.datetime.utctimetuple(datetime.datetime.now().utcnow())
   currentSecondsInDay = utc.tm_sec + 60 * (utc.tm_min + 60 * ((utc.tm_hour-5)%24))
   return (24*3600-currentSecondsInDay+30) ## pad ~30 seconds because AoC's clock seems to be roughly 30sec fast
 
-def getSecondsUntilDrop(HTTPsession):
+def getSecondsUntilDrop(HTTPsession) -> int:
   r = HTTPsession.get("https://adventofcode.com/")
   if not r.ok:
     return estimateSecondsUntilDrop()
@@ -51,7 +59,7 @@ def getSecondsUntilDrop(HTTPsession):
     eta_end = r.text.find(";", eta_start)
     return int(r.text[eta_start:eta_end])
   
-def getStartTime(HTTPsession):
+def getStartTime(HTTPsession) -> float:
   secondsUntil = getSecondsUntilDrop(HTTPsession)
   return time.time() + secondsUntil
 
@@ -60,7 +68,7 @@ def printCountDownMessage(c, totalSecondsLeft):
   minutesLeft = int((totalSecondsLeft-(hoursLeft*3600)) / 60)
   secLeft = totalSecondsLeft % 60
   if (totalSecondsLeft > 3600):
-    sys.stdout.write(f'\r{c} Waiting {hoursLeft} hours {minutesLeft} minutes {secLeft} seconds {c}')
+    sys.stdout.write(f'\r{c} Waiting {hoursLeft} hours {minutesLeft} minutes {secLeft} seconds {c}   ')
   elif(totalSecondsLeft > 60):
     sys.stdout.write(f'\r{c} Waiting {minutesLeft} minutes {secLeft} seconds {c}                ')
   else:
@@ -96,52 +104,64 @@ def waitTillDrop(HTTPsession):
     raise KeyboardInterrupt("User Escape Sequence")
   done = True
 
-
-def main() -> int:
-  s = req.session()
-  my_headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:75.0) Gecko/20100101 Firefox/75.0'}
-  s.headers.update(my_headers)
-  config = {}
+def fetchInput(session, config):
   status_code = 404
   retryCodes = [404]
   retryWarningSent = False
-  with open('settings.ini', 'r') as c:
+  attempts = 1
+  while (status_code in retryCodes):
+    response = session.get("https://adventofcode.com/2021/day/"+config["day"]+"/input")
+    status_code = response.status_code
+    time.sleep(0.2*attempts) # to prevent spamming AoC servers w/ requests
+    if not retryWarningSent:
+      if not response.ok and status_code in retryCodes:
+        print("Couldn't retrieve input. Waiting until 12:00 EST to attempt a new request.")
+        retryWarningSent = True
+        try:
+          waitTillDrop(session)
+        except KeyboardInterrupt:
+          sys.stdout.write("\rLet's try again later                           ")
+          raise KeyboardInterrupt
+
+    attempts += 1
+    if (attempts > 25):
+      print("Failed to retrieve input after 25 requests. Exiting to prevent spamming AoC servers. Please notify this repo's Issues section.")
+      break
+  
+  if (response.ok):
+    input = response.text.rstrip()
+  else:
+    input = "Service Failed. Please notify the Github Repo."
+
+  return (input, {"ok" : response.ok, "reason": response.reason, "status_code": response.status_code})
+
+
+def main() -> int:
+  with open('settings.ini', 'r') as conf:
     try:
-      config = getConfig(c.readlines())
+      config = getConfig(conf.readlines())
     except KeyError:
       sys.stdout.write("[KeyError] settings.ini seems misconfigured. See README.md for example format.")
     except ValueError:
       sys.stdout.write("[ValueError] settings.ini seems misconfigured. See README.md for example format.")
 
-    s.cookies.set("session",config["session"],domain="adventofcode.com")
-    attempts = 1
-    while (status_code in retryCodes):
-      r = s.get("https://adventofcode.com/2021/day/"+config["day"]+"/input")
-      status_code = r.status_code
-      time.sleep(0.2*attempts) # to prevent spamming AoC servers w/ requests
-      if not retryWarningSent:
-        if not r.ok and status_code in retryCodes:
-          retryWarningSent = True
-          print("Couldn't retrieve input. Waiting until 12:00 EST to attempt a new request.")
-          try:
-            waitTillDrop(s)
-          except KeyboardInterrupt:
-            sys.stdout.write("\rLet's try again later                           ")
-            return 0
-      attempts += 1
-    input = r.text.rstrip()
+    session = buildSession(config)
+
+    try:
+      input, status = fetchInput(session, config)
+    except KeyboardInterrupt:
+      # fetchInput failed due to User's early termination of service
+      return 0
   
-
-
-
-  if (r.ok):
+  if (status["ok"]):
     buildNewFolder(config["day"], input)
     increaseConfigDayValue(config)
     print("Success! Happy Coding!")
   else:
-    print("[ERROR] GET Response Code: " + str(r.status_code))
-    print("[ERROR] " + r.reason)
+    print("[ERROR] GET Response Code: " + str(status["status_code"]))
+    print("[ERROR] " + status["reason"])
     print("Couldn't retrieve today's input. Try updating your session key in settings.ini")
+
 
   return 0
 
