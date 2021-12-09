@@ -105,17 +105,14 @@ def waitTillDrop(HTTPsession):
   done = True
 
 def fetchInput(session, config):
-  status_code = 404
+  response = session.get("https://adventofcode.com/2021/day/"+config["day"]+"/input")
   retryCodes = [404]
   retryWarningSent = False
   attempts = 1
-  while (status_code in retryCodes):
-    response = session.get("https://adventofcode.com/2021/day/"+config["day"]+"/input")
-    status_code = response.status_code
-    time.sleep(0.2*attempts) # to prevent spamming AoC servers w/ requests
+  while (response.status_code in retryCodes):
     if not retryWarningSent:
-      if not response.ok and status_code in retryCodes:
-        print("Couldn't retrieve input. Waiting until 12:00 EST to attempt a new request.")
+      if not response.ok and response.status_code in retryCodes:
+        sys.stdout.write("\nCouldn't retrieve input. Waiting until 12:00 EST to attempt a new request.\n")
         retryWarningSent = True
         try:
           waitTillDrop(session)
@@ -123,9 +120,12 @@ def fetchInput(session, config):
           sys.stdout.write("\rLet's try again later                           ")
           raise KeyboardInterrupt
 
+    response = session.get("https://adventofcode.com/2021/day/"+config["day"]+"/input")
+    time.sleep(0.2*attempts) # to prevent spamming AoC servers w/ requests
+
     attempts += 1
     if (attempts > 25):
-      print("Failed to retrieve input after 25 requests. Exiting to prevent spamming AoC servers. Please notify this repo's Issues section.")
+      sys.stderr.write("\nFailed to retrieve input after 25 requests. Exiting to prevent spamming AoC servers. Please notify this repo's Issues section.")
       break
   
   if (response.ok):
@@ -140,10 +140,12 @@ def main() -> int:
   with open('settings.ini', 'r') as conf:
     try:
       config = getConfig(conf.readlines())
-    except KeyError:
-      sys.stdout.write("[KeyError] settings.ini seems misconfigured. See README.md for example format.")
-    except ValueError:
-      sys.stdout.write("[ValueError] settings.ini seems misconfigured. See README.md for example format.")
+    except KeyError as error:
+      sys.stdout.write("\n[KeyError] settings.ini seems misconfigured. See README.md for example format.")
+      sys.stderr.write(f"\n{error}")
+    except ValueError as error:
+      sys.stdout.write("\n[ValueError] settings.ini seems misconfigured. See README.md for example format.")
+      sys.stderr.write(f"\n{error}")
 
     session = buildSession(config)
 
@@ -156,11 +158,11 @@ def main() -> int:
   if (status["ok"]):
     buildNewFolder(config["day"], input)
     increaseConfigDayValue(config)
-    print("Success! Happy Coding!")
+    sys.stdout.write("\nSuccess! Happy Coding!")
   else:
-    print("[ERROR] GET Response Code: " + str(status["status_code"]))
-    print("[ERROR] " + status["reason"])
-    print("Couldn't retrieve today's input. Try updating your session key in settings.ini")
+    sys.stderr.write("\n[ERROR] GET Response Code: " + str(status["status_code"]))
+    sys.stderr.write("\n[ERROR] " + status["reason"])
+    sys.stderr.write("\nCouldn't retrieve today's input. Try updating your session key in settings.ini")
 
 
   return 0
