@@ -13,90 +13,76 @@ def getConfig(keyvals) -> dict:
   expectedKeys = {"session","year","day"}
   for keyval in keyvals:
     (key, val) = keyval.split('=')
-    expectedKeys.remove(key)      
-    config[key] = val.strip()
+    expectedKeys.remove(key.strip())      
+    config[key.strip()] = val.strip()
   if len(expectedKeys) != 0:
     raise KeyError(f'Missing {[field for field in expectedKeys]} fields in settings.ini')
   return config
+
+def increaseConfigDayValue(config):
+  with open('settings.ini', 'w') as f:
+    for key, val in config.items():
+      if (key == "day"):
+        val = int(val)+1
+      f.write(key+"="+str(val)+'\n')
 
 def buildNewFolder(day, input):
   os.chdir("..")
   os.mkdir(day)
   obj = os.scandir("./AdventOfCodeUtils/dummy")
   for entry in obj :
-    if entry.is_file():
+    if entry.is_file() or entry.is_dir():
       shutil.copy(entry, os.curdir+"/"+day)
-  os.chdir(day)
-  with open('input.txt','w') as f:
+  with open(f'{day}/input.txt','w') as f:
     f.write(input)
-  os.chdir("../AdventOfCodeUtils")
-
-def updateConfigDayValue(config):
-  with open('settings.ini', 'w') as f:
-    for key, val in config.items():
-      if (key != "day"):
-        f.write(key+"="+val)
-      else:
-        val = int(val)+1
-        f.write(key+"="+str(val))
-      f.write('\n')
+  os.chdir("./AdventOfCodeUtils")
 
 def estimateSecondsUntilDrop():
-  dt = datetime.datetime
-  now = dt.now()
-  utc = dt.utctimetuple(now.utcnow())
-  hr = (utc.tm_hour-5) % 24
-  mn = utc.tm_min
-  sec = utc.tm_sec
-  secInDay = 24*3600
-  dayTimeInSec = sec + 60 * (mn + 60 * (hr))
-  return (secInDay-dayTimeInSec+30) ## pad ~30 seconds because AoC's clock seems to be roughly 30sec fast
+  utc = datetime.datetime.utctimetuple(datetime.datetime.now().utcnow())
+  currentSecondsInDay = utc.tm_sec + 60 * (utc.tm_min + 60 * ((utc.tm_hour-5)%24))
+  return (24*3600-currentSecondsInDay+30) ## pad ~30 seconds because AoC's clock seems to be roughly 30sec fast
 
-def getSecondsUntilDrop():
-  s = req.session()
-  my_headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:75.0) Gecko/20100101 Firefox/75.0'}
-  s.headers.update(my_headers)
-  r = s.get("https://adventofcode.com/")
+def getSecondsUntilDrop(HTTPsession):
+  r = HTTPsession.get("https://adventofcode.com/")
   if not r.ok:
     return estimateSecondsUntilDrop()
   else:
     eta_start = r.text.find("var server_eta = ")+17
     eta_end = r.text.find(";", eta_start)
-    result = int(r.text[eta_start:eta_end])
-    return result
+    return int(r.text[eta_start:eta_end])
   
-def getStartTime():
-  secondsUntil = getSecondsUntilDrop() # Remove 1 sec to account for general request latencies
+def getStartTime(HTTPsession):
+  secondsUntil = getSecondsUntilDrop(HTTPsession)
   return time.time() + secondsUntil
 
-def waitTillDrop():
-  startTime = getStartTime()
+def printCountDownMessage(c, totalSecondsLeft):
+  hoursLeft = int(totalSecondsLeft / 3600)
+  minutesLeft = int((totalSecondsLeft-(hoursLeft*3600)) / 60)
+  secLeft = totalSecondsLeft % 60
+  if (totalSecondsLeft > 3600):
+    sys.stdout.write(f'\r{c} Waiting {hoursLeft} hours {minutesLeft} minutes {secLeft} seconds {c}')
+  elif(totalSecondsLeft > 60):
+    sys.stdout.write(f'\r{c} Waiting {minutesLeft} minutes {secLeft} seconds {c}                ')
+  else:
+    sys.stdout.write(f'\r{c} Waiting {totalSecondsLeft} seconds {c}                            ')
+
+def waitTillDrop(HTTPsession):
+  startTime = getStartTime(HTTPsession)
   done = False
   interrupted = False
-  #here is the animation
+  
   def animate():
-    count = 0
     for c in itertools.cycle(["⢿", "⣻", "⣽", "⣾", "⣷", "⣯", "⣟", "⡿"]):
         totalSecondsLeft = int(startTime - time.time())
-        if done or interrupted or totalSecondsLeft < 0:
-            break
-        if (totalSecondsLeft > 3600):
-          hoursLeft = int(totalSecondsLeft / 3600)
-          minutesLeft = int((totalSecondsLeft-(hoursLeft*3600)) / 60)
-          secLeft = totalSecondsLeft % 60
-          sys.stdout.write(f'\r{c} Waiting {hoursLeft} hours {minutesLeft} minutes {secLeft} seconds {c}')
-        elif(totalSecondsLeft > 60):
-          minutesLeft = int((totalSecondsLeft) / 60)
-          secLeft = totalSecondsLeft-(minutesLeft*60)
-          sys.stdout.write(f'\r{c} Waiting {minutesLeft} minutes {secLeft} seconds {c}                ')
-        else:
-          sys.stdout.write(f'\r{c} Waiting {totalSecondsLeft} seconds {c}                            ')
-
+        printCountDownMessage(c, totalSecondsLeft)
         sys.stdout.flush()
         time.sleep(0.1)
-        count += 1
+
+        if done or interrupted or totalSecondsLeft < 0:
+            break
+        
     if not interrupted:
-      sys.stdout.write('\rDone!     ')
+      sys.stdout.write('\rDone!                                        \n')
 
   t = threading.Thread(target=animate)
   t.start()
@@ -138,7 +124,7 @@ def main() -> int:
           retryWarningSent = True
           print("Couldn't retrieve input. Waiting until 12:00 EST to attempt a new request.")
           try:
-            waitTillDrop()
+            waitTillDrop(s)
           except KeyboardInterrupt:
             sys.stdout.write("\rLet's try again later                           ")
             return 0
@@ -150,7 +136,7 @@ def main() -> int:
 
   if (r.ok):
     buildNewFolder(config["day"], input)
-    updateConfigDayValue(config)
+    increaseConfigDayValue(config)
     print("Success! Happy Coding!")
   else:
     print("[ERROR] GET Response Code: " + str(r.status_code))
