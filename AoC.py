@@ -143,9 +143,11 @@ def main() -> int:
     except KeyError as error:
       sys.stdout.write("\n[KeyError] settings.ini seems misconfigured. See README.md for example format.")
       sys.stderr.write(f"\n{error}")
+      return 0
     except ValueError as error:
       sys.stdout.write("\n[ValueError] settings.ini seems misconfigured. See README.md for example format.")
       sys.stderr.write(f"\n{error}")
+      return 0
 
     session = buildSession(config)
 
