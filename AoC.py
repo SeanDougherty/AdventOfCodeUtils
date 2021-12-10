@@ -120,7 +120,7 @@ def fetchInput(session, config):
         waitTillDrop(session)
 
     response = session.get("https://adventofcode.com/2021/day/"+config["day"]+"/input")
-    time.sleep(0.2*attempts) # to prevent spamming AoC servers w/ requests
+    time.sleep(1*attempts) # to prevent spamming AoC servers w/ requests
 
     attempts += 1
     if (attempts > 25):
